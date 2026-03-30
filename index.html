@@ -64,6 +64,31 @@
         <button type="button" class="btn btn-ghost" id="btn-rainbow-reset">Play again</button>
       </section>
 
+      <section class="card" id="blockworld-card" aria-labelledby="blockworld-heading">
+        <h2 id="blockworld-heading">Block world (3D)</h2>
+        <p class="lead">
+          A tiny block playground (not Minecraft — our own mini world). Works best on a computer with a keyboard and mouse.
+        </p>
+        <p class="blockworld-keys">
+          <strong>Click the blue area</strong> to capture the mouse, then <strong>W A S D</strong> move,
+          <strong>mouse</strong> look, <strong>Space</strong> jump, <strong>left-click</strong> break a block,
+          <strong>right-click</strong> place. Press <strong>Esc</strong> to release the mouse. Keys
+          <strong>1–4</strong> pick block color.
+        </p>
+        <div class="blockworld-toolbar" role="toolbar" aria-label="Block type">
+          <span class="blockworld-toolbar-label">Place blocks:</span>
+          <button type="button" class="blockworld-type" data-block-type="0" aria-pressed="true">1 Grass</button>
+          <button type="button" class="blockworld-type" data-block-type="1" aria-pressed="false">2 Wood</button>
+          <button type="button" class="blockworld-type" data-block-type="2" aria-pressed="false">3 Stone</button>
+          <button type="button" class="blockworld-type" data-block-type="3" aria-pressed="false">4 Brick</button>
+          <button type="button" class="btn btn-ghost btn--small" id="blockworld-reset">Reset world</button>
+        </div>
+        <div class="blockworld-wrap">
+          <div id="blockworld-root" class="blockworld-canvas-host"></div>
+          <p class="blockworld-overlay-hint">Click here to play · Esc = stop mouse look</p>
+        </div>
+      </section>
+
       <section class="card" id="owner-auth-card" aria-labelledby="owner-auth-heading">
         <h2 id="owner-auth-heading">Owner sign-in (upload photos)</h2>
         <p class="lead">
@@ -165,8 +190,10 @@
       </p>
     </footer>
 
+    <script src="js/vendor/three.min.js"></script>
     <script src="js/community-config.js"></script>
     <script src="js/playground.js" defer></script>
     <script src="js/app.js" defer></script>
+    <script src="js/blockworld.js" defer></script>
   </body>
 </html>

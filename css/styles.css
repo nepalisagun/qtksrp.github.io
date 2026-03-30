@@ -439,6 +439,90 @@ label.btn[aria-disabled="true"] {
   color: var(--muted);
 }
 
+.blockworld-keys {
+  margin: 0 0 1rem;
+  font-size: 0.95rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.blockworld-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.blockworld-toolbar-label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--ink);
+  width: 100%;
+}
+
+@media (min-width: 520px) {
+  .blockworld-toolbar-label {
+    width: auto;
+  }
+}
+
+.blockworld-type {
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 0.4rem 0.65rem;
+  border-radius: 8px;
+  border: 2px solid var(--border);
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.blockworld-type--active {
+  border-color: var(--accent-2);
+  background: rgba(78, 205, 196, 0.2);
+}
+
+.blockworld-type:focus-visible {
+  outline: 3px solid var(--accent-2);
+  outline-offset: 2px;
+}
+
+.blockworld-wrap {
+  position: relative;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 2px solid var(--border);
+  background: #6ec8e8;
+}
+
+.blockworld-canvas-host {
+  width: 100%;
+  height: min(420px, 58vh);
+  min-height: 240px;
+  display: block;
+}
+
+.blockworld-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: crosshair;
+}
+
+.blockworld-overlay-hint {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  margin: 0;
+  padding: 0.45rem 0.65rem;
+  font-size: 0.8rem;
+  color: #fff;
+  background: rgba(26, 26, 46, 0.72);
+  pointer-events: none;
+}
+
 .joke-display {
   margin: 0 0 1.25rem;
   padding: 1rem 1.25rem;
