@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Fun Corner — A safe little playground</title>
+    <meta
+      name="description"
+      content="Games, jokes, a picture gallery, and a family message wall for kids. No tracking; optional sharing needs a grown-up setup."
+    />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <meta
+      name="permissions-policy"
+      content="camera=(), microphone=(), geolocation=(), payment=()"
+    />
+    <!-- CSP: self-hosted scripts; blob: for gallery thumbnails; connect to Supabase only if you enable shared messages (community-config.js) -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; base-uri 'none'; object-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://*.supabase.co; form-action 'none'; frame-ancestors 'none'; upgrade-insecure-requests;"
+    />
+    <link rel="stylesheet" href="css/styles.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to main content</a>
+
+    <header class="site-header">
+      <div class="header-inner">
+        <div class="logo" aria-hidden="true">
+          <span class="logo-star">★</span>
+        </div>
+        <div>
+          <h1 class="site-title">Fun Corner</h1>
+          <p class="tagline">Games, jokes, and bright ideas — right in your browser.</p>
+        </div>
+      </div>
+    </header>
+
+    <main id="main">
+      <section class="card card--notice" aria-labelledby="sharing-heading">
+        <h2 id="sharing-heading">Pictures &amp; messages</h2>
+        <p class="lead lead--tight">
+          <strong>Pictures</strong> are saved on <strong>this device only</strong> (this phone, tablet, or computer) — they are not sent to the internet.
+          The <strong>message wall</strong> looks like chat: you can leave notes for people who use <em>this same browser</em>. For friends on their own devices, a grown-up can turn on optional online sharing — see the README.
+        </p>
+      </section>
+
+      <section class="card" aria-labelledby="jokes-heading">
+        <h2 id="jokes-heading">Silly joke button</h2>
+        <p class="lead">Press the button for a kid-friendly joke. No internet needed after the page loads.</p>
+        <blockquote class="joke-display" id="joke-text" aria-live="polite">
+          Ready? Tap the button!
+        </blockquote>
+        <button type="button" class="btn btn-primary" id="btn-joke">
+          Tell me a joke
+        </button>
+      </section>
+
+      <section class="card" aria-labelledby="colors-heading">
+        <h2 id="colors-heading">Rainbow tap</h2>
+        <p class="lead">Tap the squares in order: red, then orange, then yellow, green, blue, purple.</p>
+        <div class="rainbow-grid" id="rainbow-grid" role="group" aria-label="Rainbow color buttons"></div>
+        <p class="status" id="rainbow-status" aria-live="polite">
+          Find Red first, then Orange, Yellow, Green, Blue, and Purple — in that order!
+        </p>
+        <button type="button" class="btn btn-ghost" id="btn-rainbow-reset">Play again</button>
+      </section>
+
+      <section class="card" aria-labelledby="gallery-heading">
+        <h2 id="gallery-heading">My picture gallery</h2>
+        <p class="lead">Pick a photo from your device. It is resized to save space and stored only in this browser.</p>
+        <p class="gallery-hint" id="gallery-hint">Loading…</p>
+        <div class="gallery-toolbar">
+          <input
+            type="file"
+            id="gallery-input"
+            class="visually-hidden"
+            accept="image/*"
+            aria-label="Choose a picture to add"
+          />
+          <label for="gallery-input" class="btn btn-primary">Add a picture</label>
+          <button type="button" class="btn btn-ghost" id="gallery-clear-all">Remove all pictures</button>
+        </div>
+        <div class="gallery-grid" id="gallery-grid"></div>
+      </section>
+
+      <section class="card" aria-labelledby="wall-heading">
+        <h2 id="wall-heading">Friend message wall</h2>
+        <p class="lead">Write a short note. Press Enter to send (Shift+Enter for a new line).</p>
+        <div
+          class="chat-log"
+          id="chat-log"
+          role="log"
+          aria-live="polite"
+          aria-relevant="additions"
+          aria-label="Messages from friends"
+        ></div>
+        <div class="chat-compose">
+          <label class="field-label" for="chat-name">Your name</label>
+          <input
+            type="text"
+            id="chat-name"
+            class="field-input"
+            maxlength="24"
+            autocomplete="nickname"
+            placeholder="e.g. Alex"
+          />
+          <label class="field-label" for="chat-msg">Message</label>
+          <textarea
+            id="chat-msg"
+            class="field-input field-input--tall"
+            maxlength="500"
+            rows="3"
+            placeholder="Say something kind…"
+          ></textarea>
+          <button type="button" class="btn btn-secondary" id="chat-send">Send</button>
+        </div>
+        <p class="remote-status" id="remote-status" aria-live="polite"></p>
+      </section>
+
+      <section class="card" aria-labelledby="facts-heading">
+        <h2 id="facts-heading">Did you know?</h2>
+        <ul class="facts-list" id="facts-list"></ul>
+        <button type="button" class="btn btn-secondary" id="btn-shuffle-facts">
+          Shuffle facts
+        </button>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        <strong>For grown-ups:</strong> This is a static site. Games and facts do not send data anywhere.
+        Pictures and local-only messages stay in the browser (IndexedDB / localStorage). Optional shared
+        messages use Supabase only if you add keys in <code>js/community-config.js</code> — review content
+        and who gets the link; public boards can attract spam. Host on GitHub Pages with HTTPS.
+      </p>
+    </footer>
+
+    <script src="js/community-config.js"></script>
+    <script src="js/playground.js" defer></script>
+    <script src="js/app.js" defer></script>
+  </body>
+</html>

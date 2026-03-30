@@ -1,0 +1,24 @@
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Editor / IDE
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+npm-debug.log*
+
+# Optional local tools
+node_modules/
+.env
+.env.*
+
+# Python (if you use a local server / scripts)
+.venv/
+venv/
+__pycache__/
+*.py[cod]
