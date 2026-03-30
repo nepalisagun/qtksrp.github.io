@@ -1,15 +1,18 @@
 # Fun Corner
 
-A small static site for kids: jokes, a rainbow game, fun facts, a **picture gallery**, and a **message wall**. Pictures and messages are stored in **[Supabase](https://supabase.com/)** (Storage + Postgres) when `js/community-config.js` is filled in. Games and jokes do not use Supabase.
+Static kids’ site: games, rainbow, facts, a **photo gallery** (owner uploads only), **likes / comments / replies** on each photo, and a **message wall**. Uses [Supabase](https://supabase.com/) Auth + Storage + Postgres.
 
-## One-time Supabase setup
+## 1. Supabase Auth (owner account)
 
-Run these in the Supabase **SQL Editor** (adjust nothing if the names match your config).
+1. Dashboard → **Authentication** → **Providers** → enable **Email**.
+2. **Authentication** → **Sign In / Providers** → turn **off** “Allow new users to sign up” (recommended) so random people cannot create accounts.
+3. **Authentication** → **Users** → **Add user** → enter **your** email and password. This is the **owner** who can upload/delete photos.
+4. Copy that user’s **User UID** (UUID). You will paste it into SQL in step 3 below.
 
-### 1. Messages table
+## 2. Database: messages (if not already created)
 
 ```sql
-create table fc_messages (
+create table if not exists fc_messages (
   id uuid primary key default gen_random_uuid(),
   created_at timestamptz not null default now(),
   author text not null,
@@ -20,74 +23,177 @@ create table fc_messages (
 
 alter table fc_messages enable row level security;
 
+drop policy if exists "Anyone can read messages" on fc_messages;
+drop policy if exists "Anyone can insert messages" on fc_messages;
+
 create policy "Anyone can read messages"
-  on fc_messages for select
-  using (true);
+  on fc_messages for select using (true);
 
 create policy "Anyone can insert messages"
-  on fc_messages for insert
-  with check (true);
+  on fc_messages for insert with check (true);
 ```
 
-If the table already exists, skip this block.
+## 3. Storage: only **you** upload/delete photos
 
-### 2. Photo bucket + Storage policies
-
-Creates a **public** bucket so images can be shown with ordinary `<img src="…">` URLs. Anyone with your site can upload/delete if these policies stay wide open — use a private family URL and monitor the bucket.
+Replace `YOUR_AUTH_USER_UUID` with the UUID from **Authentication → Users** (step 1).
 
 ```sql
+-- Bucket (public read so <img src> works)
 insert into storage.buckets (id, name, public)
 values ('fc-photos', 'fc-photos', true)
 on conflict (id) do update set public = excluded.public;
 
+-- Remove old open policies if you ran the previous README
+drop policy if exists "fc-photos read" on storage.objects;
+drop policy if exists "fc-photos insert" on storage.objects;
+drop policy if exists "fc-photos delete" on storage.objects;
+drop policy if exists "fc photos read" on storage.objects;
+drop policy if exists "fc photos insert" on storage.objects;
+drop policy if exists "fc photos delete" on storage.objects;
+
+-- Anyone can view images
 create policy "fc-photos read"
   on storage.objects for select
   using (bucket_id = 'fc-photos');
 
-create policy "fc-photos insert"
+-- Only your Auth user can upload
+create policy "fc-photos insert owner"
   on storage.objects for insert
-  with check (bucket_id = 'fc-photos');
+  with check (
+    bucket_id = 'fc-photos'
+    and auth.uid() = 'YOUR_AUTH_USER_UUID'::uuid
+  );
 
-create policy "fc-photos delete"
+-- Only your Auth user can delete
+create policy "fc-photos delete owner"
   on storage.objects for delete
-  using (bucket_id = 'fc-photos');
+  using (
+    bucket_id = 'fc-photos'
+    and auth.uid() = 'YOUR_AUTH_USER_UUID'::uuid
+  );
 ```
 
-If a policy name already exists, drop it first or rename the policy in SQL.
+### Multiple people who can upload/delete
 
-### 3. Site config
+Each person needs their **own** Supabase Auth user (each has a **User UID**). Replace the **insert** and **delete** policies with one rule that allows **any** of those UUIDs:
 
-Edit `js/community-config.js`:
+```sql
+drop policy if exists "fc-photos insert owner" on storage.objects;
+drop policy if exists "fc-photos delete owner" on storage.objects;
 
-```javascript
-window.FUN_CORNER_REMOTE = {
-  supabaseUrl: "https://YOUR_PROJECT.supabase.co",
-  anonKey: "YOUR_PUBLISHABLE_OR_LEGACY_ANON_KEY",
-  messagesTable: "fc_messages",
-  photosBucket: "fc-photos",
-};
+create policy "fc-photos insert owners"
+  on storage.objects for insert
+  with check (
+    bucket_id = 'fc-photos'
+    and auth.uid() in (
+      'FIRST_USER_UUID'::uuid,
+      'SECOND_USER_UUID'::uuid
+      -- add more lines: ,'ANOTHER_UUID'::uuid
+    )
+  );
+
+create policy "fc-photos delete owners"
+  on storage.objects for delete
+  using (
+    bucket_id = 'fc-photos'
+    and auth.uid() in (
+      'FIRST_USER_UUID'::uuid,
+      'SECOND_USER_UUID'::uuid
+    )
+  );
 ```
 
-Use the **publishable** key (`sb_publishable_…`) or legacy **anon** JWT from **Project Settings → API Keys**. Never put the Postgres password or `postgresql://…` connection string in this file.
+The site does not list these UUIDs — only **signed-in** users are checked. Anyone in the `in (...)` list signs in on **Owner sign-in** and can add/remove photos; visitors without an account still only view/comment/like.
 
-The app sends headers correctly for publishable keys (no `Authorization: Bearer` for non-JWT keys).
+## 4. Tables: comments, likes, comment-likes
+
+Visitors can **read** and **add** comments/likes; `delete` on like rows lets people **unlike** (open policy — fine for a small family site).
+
+```sql
+create table if not exists fc_photo_comments (
+  id uuid primary key default gen_random_uuid(),
+  created_at timestamptz not null default now(),
+  photo_key text not null,
+  author text not null,
+  body text not null,
+  parent_id uuid references fc_photo_comments(id) on delete cascade,
+  constraint author_len check (char_length(author) <= 24),
+  constraint body_len check (char_length(body) <= 500)
+);
+
+create index if not exists idx_fc_photo_comments_photo on fc_photo_comments(photo_key);
+
+alter table fc_photo_comments enable row level security;
+
+drop policy if exists "fc_photo_comments read" on fc_photo_comments;
+drop policy if exists "fc_photo_comments insert" on fc_photo_comments;
+
+create policy "fc_photo_comments read"
+  on fc_photo_comments for select using (true);
+
+create policy "fc_photo_comments insert"
+  on fc_photo_comments for insert with check (true);
+
+create table if not exists fc_photo_likes (
+  id uuid primary key default gen_random_uuid(),
+  created_at timestamptz not null default now(),
+  photo_key text not null,
+  voter_id text not null,
+  unique (photo_key, voter_id)
+);
+
+alter table fc_photo_likes enable row level security;
+
+drop policy if exists "fc_photo_likes read" on fc_photo_likes;
+drop policy if exists "fc_photo_likes insert" on fc_photo_likes;
+drop policy if exists "fc_photo_likes delete" on fc_photo_likes;
+
+create policy "fc_photo_likes read" on fc_photo_likes for select using (true);
+create policy "fc_photo_likes insert" on fc_photo_likes for insert with check (true);
+create policy "fc_photo_likes delete" on fc_photo_likes for delete using (true);
+
+create table if not exists fc_comment_likes (
+  id uuid primary key default gen_random_uuid(),
+  created_at timestamptz not null default now(),
+  comment_id uuid not null references fc_photo_comments(id) on delete cascade,
+  voter_id text not null,
+  unique (comment_id, voter_id)
+);
+
+alter table fc_comment_likes enable row level security;
+
+drop policy if exists "fc_comment_likes read" on fc_comment_likes;
+drop policy if exists "fc_comment_likes insert" on fc_comment_likes;
+drop policy if exists "fc_comment_likes delete" on fc_comment_likes;
+
+create policy "fc_comment_likes read" on fc_comment_likes for select using (true);
+create policy "fc_comment_likes insert" on fc_comment_likes for insert with check (true);
+create policy "fc_comment_likes delete" on fc_comment_likes for delete using (true);
+```
+
+## 5. Site config
+
+Edit `js/community-config.js` with your project URL and **publishable** (or legacy anon) key. Optional overrides: `messagesTable`, `photosBucket`, `commentsTable`, `photoLikesTable`, `commentLikesTable`.
+
+## 6. Use the site
+
+1. Open the site → **Owner sign-in** → your Supabase Auth email/password → **Add a picture**.
+2. Others open the same page (no sign-in): they see photos, can **♥** like, open **Comments**, post, **Reply**, and **♥** comments.
+3. **Message wall** still accepts posts from anyone with the link unless you tighten `fc_messages` policies.
 
 ## Security notes
 
-- The **publishable** key is visible in the browser — **RLS** and **Storage policies** are what protect you. Tighten policies if you expose the site widely.
-- **Public bucket** means image URLs can be guessed only if object names are known; names are random UUIDs. For stronger control you’d switch to private buckets and signed URLs (more setup).
-- This is **not** moderated kids’ social media — supervise use and who receives the link.
+- **Photo metadata:** The site never uploads your original file. It decodes the image to pixels and writes a **new JPEG** (via canvas), which strips typical **EXIF / GPS / IPTC / XMP** and other embedded tags. The stored name is a random UUID — not your device filename.
+- **Owner password** is never stored in the repo; only your session in the browser after sign-in.
+- **Publishable key** is public; protection is **RLS** and **Storage policies** (especially `auth.uid()` on uploads).
+- Open **like/comment delete** policies mean someone could remove another person’s like if they guess `voter_id` (a random browser id) — unlikely; tighten later if needed.
+- Not suitable for unsupervised public internet; keep the URL private and supervise children.
 
-## Content Security Policy
+## GitHub Pages
 
-The page allows `img-src` and `connect-src` to `https://*.supabase.co` for gallery images and APIs.
+**Settings → Pages** → deploy from **`main`** / **`/` (root)**.
 
-## Publish on GitHub Pages
-
-1. Push this repo to GitHub.
-2. **Settings → Pages → Deploy from a branch** → `main` → `/ (root)`.
-
-## Try it locally
+## Local preview
 
 ```bash
 python -m http.server 8080

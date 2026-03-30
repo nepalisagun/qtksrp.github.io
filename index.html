@@ -39,7 +39,7 @@
       <section class="card card--notice" aria-labelledby="sharing-heading">
         <h2 id="sharing-heading">Pictures &amp; messages</h2>
         <p class="lead lead--tight">
-          With <code>js/community-config.js</code> set up, <strong>pictures</strong> upload to your <strong>Supabase Storage</strong> bucket and <strong>messages</strong> save in your <strong>Supabase</strong> table — anyone with the site link can see them. Use a private link and review Supabase policies; this is not for chatting with strangers.
+          <strong>Only you</strong> (signed-in owner) can upload or delete photos. <strong>Everyone</strong> can view the gallery, <strong>like</strong> photos, <strong>comment</strong>, <strong>reply</strong>, and <strong>like comments</strong>. The message wall is still open to anyone with the link — use a private URL and supervise kids.
         </p>
       </section>
 
@@ -64,9 +64,41 @@
         <button type="button" class="btn btn-ghost" id="btn-rainbow-reset">Play again</button>
       </section>
 
+      <section class="card" id="owner-auth-card" aria-labelledby="owner-auth-heading">
+        <h2 id="owner-auth-heading">Owner sign-in (upload photos)</h2>
+        <p class="lead">
+          Sign in with the <strong>Supabase Auth</strong> account you created for yourself (see README). Visitors do not need an account.
+        </p>
+        <div class="owner-auth-row">
+          <label class="field-label" for="owner-email">Email</label>
+          <input
+            type="email"
+            id="owner-email"
+            class="field-input"
+            autocomplete="username"
+            placeholder="owner@example.com"
+          />
+          <label class="field-label" for="owner-password">Password</label>
+          <input
+            type="password"
+            id="owner-password"
+            class="field-input"
+            autocomplete="current-password"
+            placeholder="••••••••"
+          />
+          <div class="owner-auth-buttons">
+            <button type="button" class="btn btn-primary" id="owner-signin">Sign in</button>
+            <button type="button" class="btn btn-ghost" id="owner-signout" style="display: none">Sign out</button>
+          </div>
+        </div>
+        <p class="owner-auth-status" id="owner-auth-status" aria-live="polite"></p>
+      </section>
+
       <section class="card" aria-labelledby="gallery-heading">
         <h2 id="gallery-heading">My picture gallery</h2>
-        <p class="lead">Pick a photo from your device. It is resized and uploaded to your Supabase bucket so friends can see it too.</p>
+        <p class="lead">
+          Owner: add photos after signing in above. Each image is re-encoded before upload so location/camera metadata is not sent to the server — only picture pixels. Others can view, like, comment, and reply.
+        </p>
         <p class="gallery-hint" id="gallery-hint">Loading…</p>
         <div class="gallery-toolbar">
           <input
@@ -127,10 +159,9 @@
 
     <footer class="site-footer">
       <p>
-        <strong>For grown-ups:</strong> Games and jokes stay in the browser. Pictures and the message wall use
-        Supabase (Storage + Postgres) when <code>js/community-config.js</code> is configured — data leaves the
-        device for those features. Tighten RLS and Storage policies for your comfort; the publishable key is
-        public in the page source. Host on GitHub Pages with HTTPS.
+        <strong>For grown-ups:</strong> Photo uploads require <strong>Supabase Auth</strong> (owner only) plus
+        Storage RLS tied to your user id. Comments, likes, and the message wall use the anon key — review
+        policies in the README. Host on GitHub Pages with HTTPS.
       </p>
     </footer>
 
