@@ -13,10 +13,10 @@
       name="permissions-policy"
       content="camera=(), microphone=(), geolocation=(), payment=()"
     />
-    <!-- CSP: gallery images load from Supabase Storage; connect to Supabase for API -->
+    <!-- CSP: Supabase + Scratch embed (frame-src) -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; base-uri 'none'; object-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: blob: https://*.supabase.co; font-src 'self'; connect-src 'self' https://*.supabase.co; form-action 'none'; frame-ancestors 'none'; upgrade-insecure-requests;"
+      content="default-src 'self'; base-uri 'none'; object-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: blob: https://*.supabase.co; font-src 'self'; connect-src 'self' https://*.supabase.co; frame-src https://scratch.mit.edu; form-action 'none'; frame-ancestors 'none'; upgrade-insecure-requests;"
     />
     <link rel="stylesheet" href="css/styles.css" />
   </head>
@@ -64,28 +64,102 @@
         <button type="button" class="btn btn-ghost" id="btn-rainbow-reset">Play again</button>
       </section>
 
-      <section class="card" id="blockworld-card" aria-labelledby="blockworld-heading">
-        <h2 id="blockworld-heading">Block world (3D)</h2>
+      <section class="card" aria-labelledby="quote-heading">
+        <h2 id="quote-heading">Quote of the day</h2>
         <p class="lead">
-          A tiny block playground (not Minecraft — our own mini world). Works best on a computer with a keyboard and mouse.
+          Something to think about for <strong>elementary</strong> and <strong>middle school</strong> — picked for today on your calendar. Come back tomorrow for a new one!
         </p>
-        <p class="blockworld-keys">
-          <strong>Click the blue area</strong> to capture the mouse, then <strong>W A S D</strong> move,
-          <strong>mouse</strong> look, <strong>Space</strong> jump, <strong>left-click</strong> break a block,
-          <strong>right-click</strong> place. Press <strong>Esc</strong> to release the mouse. Keys
-          <strong>1–4</strong> pick block color.
+        <p class="quote-date" id="quote-date"></p>
+        <blockquote class="quote-display" id="quote-text"></blockquote>
+        <footer class="quote-attribution" id="quote-author"></footer>
+      </section>
+
+      <section class="card" id="journal-card" aria-labelledby="journal-heading">
+        <h2 id="journal-heading">Writing journal (grades 3–4)</h2>
+        <p class="lead">
+          Choose a <strong>journal title</strong> (prompt) and <strong>difficulty</strong>, write in the box, then tap
+          <strong>Check my writing</strong>. Feedback is <strong>rule-based</strong> in your browser — not AI. No text
+          is sent to grammar APIs (e.g. Sapling). Optional cloud copy uses Supabase only if you enable it in
+          <code>community-config.js</code> and run the README SQL.
         </p>
-        <div class="blockworld-toolbar" role="toolbar" aria-label="Block type">
-          <span class="blockworld-toolbar-label">Place blocks:</span>
-          <button type="button" class="blockworld-type" data-block-type="0" aria-pressed="true">1 Grass</button>
-          <button type="button" class="blockworld-type" data-block-type="1" aria-pressed="false">2 Wood</button>
-          <button type="button" class="blockworld-type" data-block-type="2" aria-pressed="false">3 Stone</button>
-          <button type="button" class="blockworld-type" data-block-type="3" aria-pressed="false">4 Brick</button>
-          <button type="button" class="btn btn-ghost btn--small" id="blockworld-reset">Reset world</button>
+        <div class="journal-difficulty" id="journal-difficulty" role="group" aria-label="Difficulty">
+          <button type="button" class="journal-level journal-level--active" data-journal-level="easy" aria-pressed="true">
+            Easy
+          </button>
+          <button type="button" class="journal-level" data-journal-level="moderate" aria-pressed="false">
+            Moderate
+          </button>
+          <button type="button" class="journal-level" data-journal-level="hard" aria-pressed="false">Hard</button>
         </div>
-        <div class="blockworld-wrap">
-          <div id="blockworld-root" class="blockworld-canvas-host"></div>
-          <p class="blockworld-overlay-hint">Click here to play · Esc = stop mouse look</p>
+        <label class="field-label" for="journal-topic-select">Journal title (prompt)</label>
+        <select id="journal-topic-select" class="field-input journal-select" aria-describedby="journal-requirements"></select>
+        <p class="journal-requirements" id="journal-requirements"></p>
+        <label class="field-label" for="journal-body">Your journal</label>
+        <textarea
+          id="journal-body"
+          class="field-input field-input--tall journal-textarea"
+          maxlength="5000"
+          rows="8"
+          placeholder="Write your ideas here. Use capital letters and periods when you can!"
+        ></textarea>
+        <div class="journal-cloud-option journal-cloud-option--hidden" id="journal-cloud-wrap">
+          <label class="journal-cloud-label">
+            <input type="checkbox" id="journal-save-cloud" />
+            Also save this check to the cloud (Supabase) — optional
+          </label>
+        </div>
+        <div class="journal-actions">
+          <button type="button" class="btn btn-primary" id="journal-check">Check my writing</button>
+          <button type="button" class="btn btn-secondary" id="journal-save">Save to my journal</button>
+          <button type="button" class="btn btn-ghost" id="journal-new-topic">Pick a random title</button>
+        </div>
+        <div class="journal-feedback" id="journal-feedback" aria-live="polite"></div>
+        <details class="journal-saved">
+          <summary>My saved entries (this device)</summary>
+          <ul class="journal-saved-list" id="journal-saved-list"></ul>
+          <button type="button" class="btn btn-ghost btn--small" id="journal-clear-saved">Clear all saved</button>
+        </details>
+      </section>
+
+      <section class="card" id="scratch-card" aria-labelledby="scratch-heading">
+        <h2 id="scratch-heading">Learn coding — Scratch</h2>
+        <p class="lead">
+          <a href="https://scratch.mit.edu/" rel="noopener noreferrer" target="_blank">Scratch</a>
+          is a free program from MIT where kids snap together colorful blocks to make animations, stories, and games.
+          It runs in the browser; accounts are optional for saving projects.
+        </p>
+        <div class="scratch-links">
+          <a
+            class="btn btn-primary"
+            href="https://scratch.mit.edu/projects/editor/"
+            rel="noopener noreferrer"
+            target="_blank"
+            >Open Scratch editor</a
+          >
+          <a
+            class="btn btn-secondary"
+            href="https://scratch.mit.edu/ideas"
+            rel="noopener noreferrer"
+            target="_blank"
+            >Project ideas</a
+          >
+          <a class="btn btn-ghost" href="https://www.scratchjr.org/" rel="noopener noreferrer" target="_blank"
+            >ScratchJr (ages 5–7)</a
+          >
+        </div>
+        <p class="scratch-embed-intro">
+          Try a sample project below (embedded from Scratch). Green flag to start. To share your own project here later,
+          publish it on Scratch and replace the number in <code>index.html</code> in the iframe <code>src</code> (see README).
+        </p>
+        <div class="scratch-embed-wrap">
+          <iframe
+            title="Sample Scratch project"
+            src="https://scratch.mit.edu/projects/104/embed"
+            allowtransparency="true"
+            allowfullscreen
+            allow="fullscreen"
+            loading="lazy"
+          ></iframe>
         </div>
       </section>
 
@@ -186,14 +260,14 @@
       <p>
         <strong>For grown-ups:</strong> Photo uploads require <strong>Supabase Auth</strong> (owner only) plus
         Storage RLS tied to your user id. Comments, likes, and the message wall use the anon key — review
-        policies in the README. Host on GitHub Pages with HTTPS.
+        policies in the README.         The <strong>writing journal</strong> uses <strong>rule-based</strong> checks in the browser (not AI). Entries
+        stay in localStorage unless you opt in to Supabase (see README). Host on GitHub Pages with HTTPS.
       </p>
     </footer>
 
-    <script src="js/vendor/three.min.js"></script>
     <script src="js/community-config.js"></script>
     <script src="js/playground.js" defer></script>
     <script src="js/app.js" defer></script>
-    <script src="js/blockworld.js" defer></script>
+    <script src="js/journal.js" defer></script>
   </body>
 </html>

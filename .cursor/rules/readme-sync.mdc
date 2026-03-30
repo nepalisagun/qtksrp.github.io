@@ -1,0 +1,12 @@
+---
+description: Keep README.md in sync with any project changes
+alwaysApply: true
+---
+
+# README stays current
+
+Whenever you change **this repo** (features, UI copy that reflects setup, Supabase schema/SQL, `community-config.js`, CSP in `index.html`, new scripts, env vars, deployment, or security behavior), **update `README.md` in the same edit pass** so it stays accurate.
+
+- Add or adjust sections for new features, removed features, and config steps.
+- Do not leave README describing behavior the code no longer has.
+- If the change is tiny (e.g. typo in HTML only), a README update is optional — but any user-visible or operator-facing change should be documented.
