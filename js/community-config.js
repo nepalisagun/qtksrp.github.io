@@ -8,4 +8,5 @@ window.FUN_CORNER_REMOTE = {
   supabaseUrl: "https://gsekoulukzavrlfquvxp.supabase.co",
   anonKey: "sb_publishable_hGS4qfFasTbhnyHvYQnh6w_u9NIO2Vg",
   messagesTable: "fc_messages",
+  photosBucket: "fc-photos",
 };

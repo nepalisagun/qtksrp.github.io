@@ -1,22 +1,32 @@
 (function () {
   "use strict";
 
-  var DB_NAME = "fun-corner-db";
-  var DB_VERSION = 1;
-  var STORE_PHOTOS = "photos";
-  var LS_MESSAGES = "fun_corner_messages_v1";
   var MAX_PHOTOS = 16;
   var MAX_SIDE = 960;
   var JPEG_QUALITY = 0.82;
   var POLL_MS = 20000;
 
-  /** Supabase publishable/secret keys are not JWTs — only send apikey; legacy anon JWT still uses Bearer. */
+  /** Publishable/secret keys: apikey only. Legacy anon JWT: also Bearer. */
   function supabaseRestHeaders(key, withJsonBody) {
     var k = String(key || "");
     var h = { apikey: k, Accept: "application/json" };
     if (withJsonBody) {
       h["Content-Type"] = "application/json";
     }
+    var isPlatformKey =
+      k.indexOf("sb_publishable_") === 0 || k.indexOf("sb_secret_") === 0;
+    if (!isPlatformKey) {
+      h.Authorization = "Bearer " + k;
+    }
+    return h;
+  }
+
+  function supabaseBinaryHeaders(key, contentType) {
+    var k = String(key || "");
+    var h = {
+      apikey: k,
+      "Content-Type": contentType || "application/octet-stream",
+    };
     var isPlatformKey =
       k.indexOf("sb_publishable_") === 0 || k.indexOf("sb_secret_") === 0;
     if (!isPlatformKey) {
@@ -32,77 +42,68 @@
       base: String(r.supabaseUrl).replace(/\/$/, ""),
       key: r.anonKey,
       table: r.messagesTable || "fc_messages",
+      bucket: r.photosBucket || "fc-photos",
     };
   }
 
-  function openDb() {
-    return new Promise(function (resolve, reject) {
-      var req = indexedDB.open(DB_NAME, DB_VERSION);
-      req.onerror = function () {
-        reject(req.error);
-      };
-      req.onupgradeneeded = function () {
-        var db = req.result;
-        if (!db.objectStoreNames.contains(STORE_PHOTOS)) {
-          db.createObjectStore(STORE_PHOTOS, { keyPath: "id" });
-        }
-      };
-      req.onsuccess = function () {
-        resolve(req.result);
-      };
+  function storagePublicUrl(remote, objectName) {
+    return (
+      remote.base +
+      "/storage/v1/object/public/" +
+      encodeURIComponent(remote.bucket) +
+      "/" +
+      encodeURIComponent(objectName)
+    );
+  }
+
+  function storageList(remote) {
+    var url =
+      remote.base +
+      "/storage/v1/object/list/" +
+      encodeURIComponent(remote.bucket);
+    return fetch(url, {
+      method: "POST",
+      headers: supabaseRestHeaders(remote.key, true),
+      body: JSON.stringify({
+        prefix: "",
+        limit: 100,
+        offset: 0,
+        sortBy: { column: "name", order: "desc" },
+      }),
+    }).then(function (res) {
+      if (!res.ok) return Promise.reject(new Error("list failed"));
+      return res.json();
     });
   }
 
-  function idbGetAll(db) {
-    return new Promise(function (resolve, reject) {
-      var tx = db.transaction(STORE_PHOTOS, "readonly");
-      var store = tx.objectStore(STORE_PHOTOS);
-      var req = store.getAll();
-      req.onerror = function () {
-        reject(req.error);
-      };
-      req.onsuccess = function () {
-        resolve(req.result || []);
-      };
+  function storageUpload(remote, objectName, blob) {
+    var url =
+      remote.base +
+      "/storage/v1/object/" +
+      encodeURIComponent(remote.bucket) +
+      "/" +
+      encodeURIComponent(objectName);
+    return fetch(url, {
+      method: "POST",
+      headers: supabaseBinaryHeaders(remote.key, "image/jpeg"),
+      body: blob,
+    }).then(function (res) {
+      if (!res.ok) return Promise.reject(new Error("upload failed"));
     });
   }
 
-  function idbPut(db, record) {
-    return new Promise(function (resolve, reject) {
-      var tx = db.transaction(STORE_PHOTOS, "readwrite");
-      tx.oncomplete = function () {
-        resolve();
-      };
-      tx.onerror = function () {
-        reject(tx.error);
-      };
-      tx.objectStore(STORE_PHOTOS).put(record);
-    });
-  }
-
-  function idbDelete(db, id) {
-    return new Promise(function (resolve, reject) {
-      var tx = db.transaction(STORE_PHOTOS, "readwrite");
-      tx.oncomplete = function () {
-        resolve();
-      };
-      tx.onerror = function () {
-        reject(tx.error);
-      };
-      tx.objectStore(STORE_PHOTOS).delete(id);
-    });
-  }
-
-  function idbClear(db) {
-    return new Promise(function (resolve, reject) {
-      var tx = db.transaction(STORE_PHOTOS, "readwrite");
-      tx.oncomplete = function () {
-        resolve();
-      };
-      tx.onerror = function () {
-        reject(tx.error);
-      };
-      tx.objectStore(STORE_PHOTOS).clear();
+  function storageDelete(remote, objectName) {
+    var url =
+      remote.base +
+      "/storage/v1/object/" +
+      encodeURIComponent(remote.bucket) +
+      "/" +
+      encodeURIComponent(objectName);
+    return fetch(url, {
+      method: "DELETE",
+      headers: supabaseRestHeaders(remote.key, false),
+    }).then(function (res) {
+      if (!res.ok) return Promise.reject(new Error("delete failed"));
     });
   }
 
@@ -140,28 +141,6 @@
     img.src = url;
   }
 
-  function loadLocalMessages() {
-    try {
-      var raw = localStorage.getItem(LS_MESSAGES);
-      if (!raw) return [];
-      var parsed = JSON.parse(raw);
-      return Array.isArray(parsed) ? parsed : [];
-    } catch (e) {
-      return [];
-    }
-  }
-
-  function saveLocalMessages(list) {
-    try {
-      localStorage.setItem(LS_MESSAGES, JSON.stringify(list));
-    } catch (e) {
-      /* quota exceeded — trim oldest */
-      if (list.length > 1) {
-        saveLocalMessages(list.slice(-Math.floor(list.length / 2)));
-      }
-    }
-  }
-
   function sanitizeName(s) {
     return String(s || "")
       .trim()
@@ -181,29 +160,30 @@
     var grid = document.getElementById("gallery-grid");
     var clearBtn = document.getElementById("gallery-clear-all");
     var hint = document.getElementById("gallery-hint");
+    var label = document.querySelector('label[for="gallery-input"]');
     if (!input || !grid) return;
 
-    var objectUrls = [];
+    var remote = getRemote();
 
-    function revokeAllUrls() {
-      for (var i = 0; i < objectUrls.length; i++) {
-        URL.revokeObjectURL(objectUrls[i]);
+    function setDisabled(on) {
+      input.disabled = on;
+      if (label) {
+        label.classList.toggle("is-disabled", on);
+        label.setAttribute("aria-disabled", on ? "true" : "false");
       }
-      objectUrls = [];
+      if (clearBtn) clearBtn.disabled = on;
     }
 
-    function render(rows) {
-      revokeAllUrls();
+    function render(names) {
       grid.innerHTML = "";
-      for (var i = 0; i < rows.length; i++) {
-        (function (row) {
+      if (!remote) return;
+      for (var i = 0; i < names.length; i++) {
+        (function (name) {
           var wrap = document.createElement("div");
           wrap.className = "gallery-item";
           var img = document.createElement("img");
-          var u = URL.createObjectURL(row.blob);
-          objectUrls.push(u);
-          img.src = u;
-          img.alt = "Uploaded picture";
+          img.src = storagePublicUrl(remote, name);
+          img.alt = "Shared picture";
           img.loading = "lazy";
           var del = document.createElement("button");
           del.type = "button";
@@ -211,48 +191,88 @@
           del.setAttribute("aria-label", "Remove this picture");
           del.textContent = "×";
           del.addEventListener("click", function () {
-            openDb()
-              .then(function (db) {
-                return idbDelete(db, row.id);
-              })
+            storageDelete(remote, name)
               .then(function () {
-                return openDb().then(idbGetAll);
+                return storageList(remote);
               })
-              .then(render)
-              .catch(function () {});
+              .then(function (rows) {
+                render(fileNamesFromList(rows));
+                updateHint(fileNamesFromList(rows).length);
+              })
+              .catch(function () {
+                if (hint) hint.textContent = "Could not delete. Check Storage policies in Supabase.";
+              });
           });
           wrap.appendChild(img);
           wrap.appendChild(del);
           grid.appendChild(wrap);
-        })(rows[i]);
-      }
-      if (hint) {
-        hint.textContent =
-          rows.length === 0
-            ? "No pictures yet — add one! They stay on this device."
-            : rows.length +
-              " picture" +
-              (rows.length === 1 ? "" : "s") +
-              " saved on this device.";
+        })(names[i]);
       }
     }
 
-    openDb()
-      .then(idbGetAll)
-      .then(render)
-      .catch(function () {
-        if (hint) hint.textContent = "Could not open storage. Check browser settings.";
-      });
+    function fileNamesFromList(rows) {
+      if (!Array.isArray(rows)) return [];
+      var out = [];
+      for (var i = 0; i < rows.length; i++) {
+        var n = rows[i] && rows[i].name;
+        if (n && n.indexOf("/") === -1 && /\.jpe?g$/i.test(n)) out.push(n);
+      }
+      return out;
+    }
+
+    function updateHint(count) {
+      if (!hint) return;
+      if (!remote) {
+        hint.textContent =
+          "Configure js/community-config.js with your Supabase URL and key to use the cloud gallery.";
+        return;
+      }
+      hint.textContent =
+        count === 0
+          ? "No pictures yet — add one! Stored in your Supabase bucket (" + remote.bucket + ")."
+          : count +
+            " picture" +
+            (count === 1 ? "" : "s") +
+            " in Supabase — visible to everyone who visits this site.";
+    }
+
+    function refresh() {
+      if (!remote) {
+        updateHint(0);
+        setDisabled(true);
+        return;
+      }
+      setDisabled(false);
+      if (hint) hint.textContent = "Loading pictures…";
+      storageList(remote)
+        .then(function (rows) {
+          var names = fileNamesFromList(rows);
+          render(names);
+          updateHint(names.length);
+        })
+        .catch(function () {
+          if (hint) {
+            hint.textContent =
+              "Could not load pictures. Create bucket " +
+              remote.bucket +
+              " and Storage policies (see README).";
+          }
+          render([]);
+        });
+    }
+
+    refresh();
 
     input.addEventListener("change", function () {
+      if (!remote) return;
       var file = input.files && input.files[0];
       input.value = "";
       if (!file || !file.type || file.type.indexOf("image/") !== 0) return;
 
-      openDb()
-        .then(idbGetAll)
-        .then(function (existing) {
-          if (existing.length >= MAX_PHOTOS) {
+      storageList(remote)
+        .then(function (rows) {
+          var names = fileNamesFromList(rows);
+          if (names.length >= MAX_PHOTOS) {
             if (hint) hint.textContent = "Gallery is full (" + MAX_PHOTOS + " max). Remove one first.";
             return Promise.reject(new Error("full"));
           }
@@ -263,35 +283,51 @@
               if (hint) hint.textContent = "Could not read that image. Try another file.";
               return Promise.reject(new Error("bad"));
             }
-            var id =
-              typeof crypto !== "undefined" && crypto.randomUUID
+            var objectName =
+              (typeof crypto !== "undefined" && crypto.randomUUID
                 ? crypto.randomUUID()
-                : "p-" + Date.now() + "-" + Math.random().toString(16).slice(2);
-            return openDb().then(function (db) {
-              return idbPut(db, { id: id, blob: blob, createdAt: Date.now() });
-            });
+                : "p-" + Date.now() + "-" + Math.random().toString(16).slice(2)) + ".jpg";
+            return storageUpload(remote, objectName, blob);
           });
         })
         .then(function () {
-          return openDb().then(idbGetAll);
+          return storageList(remote);
         })
-        .then(render)
+        .then(function (rows) {
+          var names = fileNamesFromList(rows);
+          render(names);
+          updateHint(names.length);
+        })
         .catch(function (err) {
           if (err && err.message === "full") return;
           if (err && err.message === "bad") return;
+          if (hint) hint.textContent = "Upload failed. Check Storage bucket and insert policy in Supabase.";
         });
     });
 
     if (clearBtn) {
       clearBtn.addEventListener("click", function () {
-        if (!window.confirm("Remove every picture from this device?")) return;
-        openDb()
-          .then(idbClear)
-          .then(function () {
-            return openDb().then(idbGetAll);
+        if (!remote) return;
+        if (!window.confirm("Remove every picture from Supabase for this site?")) return;
+        storageList(remote)
+          .then(function (rows) {
+            var names = fileNamesFromList(rows);
+            var chain = Promise.resolve();
+            for (var i = 0; i < names.length; i++) {
+              (function (n) {
+                chain = chain.then(function () {
+                  return storageDelete(remote, n);
+                });
+              })(names[i]);
+            }
+            return chain;
           })
-          .then(render)
-          .catch(function () {});
+          .then(function () {
+            return refresh();
+          })
+          .catch(function () {
+            if (hint) hint.textContent = "Could not remove all. Check delete policy on storage.objects.";
+          });
       });
     }
   }
@@ -347,7 +383,6 @@
         author: sanitizeName(r.author),
         text: sanitizeMessage(r.body),
         ts: ts,
-        remote: true,
       });
     }
     return out;
@@ -367,24 +402,6 @@
 
     function setStatus(text) {
       if (statusEl) statusEl.textContent = text;
-    }
-
-    function mergeRemote(remoteRows) {
-      var local = loadLocalMessages();
-      var byKey = {};
-      for (var i = 0; i < local.length; i++) {
-        byKey["l-" + local[i].id] = local[i];
-      }
-      for (var j = 0; j < remoteRows.length; j++) {
-        byKey["r-" + remoteRows[j].id] = remoteRows[j];
-      }
-      var merged = [];
-      for (var k in byKey) {
-        if (Object.prototype.hasOwnProperty.call(byKey, k)) {
-          merged.push(byKey[k]);
-        }
-      }
-      return merged;
     }
 
     function refreshView() {
@@ -407,14 +424,13 @@
           return res.json();
         })
         .then(function (rows) {
-          var mapped = mapRemoteRows(Array.isArray(rows) ? rows : []);
-          cache = mergeRemote(mapped);
+          cache = mapRemoteRows(Array.isArray(rows) ? rows : []);
           refreshView();
-          setStatus("Shared wall: messages sync for everyone with this page (see README for setup).");
+          setStatus("Messages load from Supabase and sync for everyone who visits this page.");
         })
         .catch(function () {
-          setStatus("Could not reach shared wall. Showing this device only.");
-          cache = loadLocalMessages();
+          setStatus("Could not load messages. Check fc_messages table and RLS in Supabase.");
+          cache = [];
           refreshView();
         });
     }
@@ -434,6 +450,10 @@
     }
 
     function send() {
+      if (!remote) {
+        setStatus("Add your Supabase URL and key in js/community-config.js to send messages.");
+        return;
+      }
       var author = sanitizeName(nameEl.value);
       var text = sanitizeMessage(msgEl.value);
       if (!author) {
@@ -446,35 +466,14 @@
         return;
       }
 
-      var entry = {
-        id:
-          typeof crypto !== "undefined" && crypto.randomUUID
-            ? crypto.randomUUID()
-            : "m-" + Date.now(),
-        author: author,
-        text: text,
-        ts: Date.now(),
-      };
-
-      if (remote) {
-        postRemote(author, text)
-          .then(function () {
-            msgEl.value = "";
-            return fetchRemote();
-          })
-          .catch(function () {
-            setStatus("Send failed. Check Supabase setup or try again.");
-          });
-        return;
-      }
-
-      var list = loadLocalMessages();
-      list.push(entry);
-      saveLocalMessages(list);
-      cache = list;
-      msgEl.value = "";
-      refreshView();
-      setStatus("Saved on this device only — friends on other phones or computers will not see it.");
+      postRemote(author, text)
+        .then(function () {
+          msgEl.value = "";
+          return fetchRemote();
+        })
+        .catch(function () {
+          setStatus("Send failed. Check Supabase table and insert policy.");
+        });
     }
 
     sendBtn.addEventListener("click", send);
@@ -486,15 +485,19 @@
     });
 
     if (remote) {
-      setStatus("Loading shared messages…");
+      nameEl.disabled = false;
+      msgEl.disabled = false;
+      sendBtn.disabled = false;
+      setStatus("Loading messages…");
       fetchRemote();
       pollTimer = window.setInterval(fetchRemote, POLL_MS);
     } else {
-      cache = loadLocalMessages();
+      cache = [];
       refreshView();
-      setStatus(
-        "This device only — notes stay in this browser. A grown-up can turn on optional sharing (README)."
-      );
+      nameEl.disabled = true;
+      msgEl.disabled = true;
+      sendBtn.disabled = true;
+      setStatus("Set js/community-config.js with Supabase URL and key to use the message wall.");
     }
 
     window.addEventListener(

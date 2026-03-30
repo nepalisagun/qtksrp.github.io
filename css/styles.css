@@ -162,6 +162,13 @@ main {
   margin-bottom: 1.25rem;
 }
 
+label.btn.is-disabled,
+label.btn[aria-disabled="true"] {
+  pointer-events: none;
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .gallery-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
